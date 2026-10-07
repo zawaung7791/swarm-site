@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Swarm: Rust vs JavaScript vs Python vs WebGPU</title>
+<meta name="description" content="The same particle simulations, a galaxy, fireworks and a flock of birds, written in Rust, JavaScript and Python and raced side by side in your browser.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='4' fill='%23FFF3E0'/><circle cx='16' cy='16' r='9' fill='none' stroke='%23FF8A4C' stroke-width='2' stroke-dasharray='3 4'/><circle cx='16' cy='16' r='14' fill='none' stroke='%23B4482C' stroke-width='2' stroke-dasharray='2 5'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #121822;
+    --space: #0A0E15;
+    --panel: #1B2331;
+    --line: #263042;
+    --edge: #344157;
+    --text: #E9EDF4;
+    --muted: #A7B2C4;
+    --rust: #FF9A5C;
+    --font: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: var(--font); font-size: 15px; line-height: 1.45;
+    min-height: 100vh; display: flex; flex-direction: column;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--rust); outline-offset: 2px; }
+
+  /* ---------- header ---------- */
+  .top {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px 24px;
+    padding: calc(18px + env(safe-area-inset-top, 0px)) 32px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 34px; font-weight: 800; font-stretch: 125%; letter-spacing: -0.02em; line-height: 1; }
+  .tagline { margin: 0; color: var(--muted); max-width: 64ch; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .views { display: flex; flex-wrap: wrap; border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; }
+  .views button {
+    min-height: 44px; padding: 0 16px; background: transparent; border: 0; cursor: pointer; color: var(--text);
+  }
+  .views button[aria-pressed="true"] { background: var(--text); color: var(--bg); font-weight: 700; }
+  .btn {
+    min-height: 44px; padding: 0 16px; background: var(--panel); border: 1px solid var(--edge);
+    border-radius: 10px; cursor: pointer;
+  }
+  .btn:hover { background: #222C3D; }
+  .btn.primary { background: var(--rust); color: #121822; border: 0; font-weight: 800; font-size: 16px; min-height: 52px; padding: 0 22px; border-radius: 12px; }
+  .btn.primary:hover { background: #FFB07F; }
+  .btn:disabled { opacity: 0.55; cursor: progress; }
+
+  /* ---------- lanes ---------- */
+  #lanes { flex-grow: 1; display: grid; gap: 1px; background: var(--line); }
+  #lanes[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #lanes[data-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (max-width: 1100px) { #lanes[data-count="3"] { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 800px) { #lanes[data-count="2"] { grid-template-columns: minmax(0, 1fr); } }
+
+  .lane { background: var(--bg); padding: 20px 28px 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .lane-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+  .lane-head h2 { margin: 0; font-size: 22px; font-weight: 800; color: var(--accent); }
+  .lane-head .detail { margin: 0; font-size: 14px; color: var(--muted); }
+  .chip {
+    display: inline-block; margin-top: 6px; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid var(--accent); font-size: 13px; font-weight: 700; color: var(--accent); min-height: 26px;
+  }
+  .chip:empty { visibility: hidden; }
+  .fps { display: flex; align-items: baseline; gap: 8px; flex-shrink: 0; }
+  .fps-num {
+    font-size: 64px; font-weight: 800; font-stretch: 125%; line-height: 0.9; letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums; min-width: 1.6ch; text-align: right;
+  }
+  .fps-num.slow { color: var(--accent); }
+  .fps span:last-child { color: var(--muted); font-size: 16px; }
+
+  .stage {
+    position: relative; aspect-ratio: 640 / 440; border-radius: 14px; overflow: hidden;
+    background: var(--space); border: 1px solid var(--line); cursor: crosshair;
+  }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .overlay {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    padding: 24px; text-align: center; color: var(--muted); background: var(--space);
+  }
+  .overlay[hidden] { display: none; }
+  .hole {
+    position: absolute; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--text);
+    transform: translate(-50%, -50%); pointer-events: none; opacity: 0.7;
+  }
+
+  .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .metrics div { display: flex; flex-direction: column; }
+  .metrics .k { font-size: 13px; color: var(--muted); }
+  .metrics .v { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .graph-head { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--muted); }
+  .graph { display: block; width: 100%; height: 64px; background: var(--space); border-radius: 6px; }
+
+  /* ---------- controls ---------- */
+  .controls {
+    padding: 18px 32px 22px; border-top: 1px solid var(--line);
+    display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 28px; align-items: end;
+  }
+  @media (max-width: 800px) { .controls { grid-template-columns: minmax(0, 1fr); gap: 18px; } }
+  .ctl { display: flex; flex-direction: column; gap: 6px; }
+  .ctl label { display: flex; justify-content: space-between; font-size: 14px; color: var(--muted); }
+  .ctl output { font-size: 18px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+  .ctl input[type=range] { width: 100%; accent-color: var(--rust); height: 28px; }
+  .select {
+    min-height: 44px; padding: 0 12px; background: var(--panel); border: 1px solid var(--edge); border-radius: 10px;
+  }
+  .select option { background: var(--panel); }
+  .hole.hawk { border-style: dashed; border-color: var(--rust); }
+  .ticks { position: relative; height: 16px; font-size: 12px; color: var(--muted); }
+  .ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  .ticks span:first-child { transform: none; }
+
+  .result {
+    padding: 14px 32px; background: var(--panel); border-top: 1px solid var(--line);
+    display: flex; gap: 8px 20px; align-items: baseline; flex-wrap: wrap;
+  }
+  .result strong { font-weight: 800; }
+  .result .r-rust { color: #FF9A5C; font-weight: 700; }
+  .result .r-js { color: #E8D44D; font-weight: 700; }
+  .result .r-numpy { color: #7FB0FF; font-weight: 700; }
+  .result .r-gpu { color: #B892FF; font-weight: 700; }
+  .result .note { color: var(--muted); }
+
+  .solo-stats { display: none; }
+
+  /* ---------- Rust only: full screen ---------- */
+  body.solo .top {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 3; border-bottom: 0;
+    background: linear-gradient(rgba(10, 14, 21, 0.85), rgba(10, 14, 21, 0));
+  }
+  body.solo .tagline { display: none; }
+  body.solo #lanes { position: fixed; inset: 0; display: block; background: var(--space); }
+  body.solo .lane { height: 100%; padding: 0; }
+  body.solo .lane-head, body.solo .metrics, body.solo .graph-head, body.solo .graph { display: none; }
+  body.solo .stage { aspect-ratio: auto; height: 100%; border: 0; border-radius: 0; }
+  body.solo .controls {
+    position: fixed; z-index: 3; left: 24px; bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    width: min(440px, calc(100% - 48px)); grid-template-columns: minmax(0, 1fr); gap: 14px;
+    background: rgba(18, 24, 34, 0.9); border: 1px solid var(--edge); border-radius: 16px; padding: 20px 22px;
+  }
+  body.solo #bench, body.solo .result { display: none; }
+  body.solo .solo-stats { display: flex; flex-direction: column; gap: 10px; }
+  .solo-count { font-size: 56px; font-weight: 800; font-stretch: 125%; line-height: 0.95; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .solo-row { display: flex; gap: 28px; }
+  .solo-row div { display: flex; flex-direction: column; }
+  .solo-row .v { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .solo-row .k { font-size: 13px; color: var(--muted); }
+  .solo-hint { margin: 0; font-size: 13px; color: var(--muted); }
+
+  #unsupported { padding: 40px 32px; max-width: 60ch; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>Swarm</h1>
+    <p class="tagline" id="tagline"></p>
+  </div>
+  <div class="actions">
+    <div class="views" role="group" aria-label="View">
+      <button type="button" data-view="side" aria-pressed="false">Side by side</button>
+      <button type="button" data-view="race" aria-pressed="false">Three-way race</button>
+      <button type="button" data-view="gpu" aria-pressed="false">CPU vs GPU</button>
+      <button type="button" data-view="solo" aria-pressed="false">Rust only</button>
+      <button type="button" data-view="gpusolo" aria-pressed="false">WebGPU only</button>
+    </div>
+    <button type="button" class="btn" id="pause">Pause</button>
+    <button type="button" class="btn" id="reset">Reset</button>
+  </div>
+</header>
+
+<main id="lanes"></main>
+
+<footer class="controls">
+  <div class="solo-stats">
+    <span class="solo-count" id="soloCount">0</span>
+    <span class="k" style="color: var(--muted)" id="soloWhat">particles, each pulled by gravity every frame</span>
+    <div class="solo-row">
+      <div><span class="v" id="soloFps" style="color: var(--rust)">–</span><span class="k">Frames per second</span></div>
+      <div><span class="v" id="soloMs">–</span><span class="k">Per frame</span></div>
+    </div>
+  </div>
+  <div class="ctl">
+    <label for="count"><span id="countLabel">Particles, in every lane</span><output id="countOut" for="count"></output></label>
+    <input type="range" id="count" min="0" max="1000" step="1">
+    <div class="ticks" aria-hidden="true" id="ticks"></div>
+  </div>
+  <div class="ctl">
+    <label for="sim"><span>Simulation</span></label>
+    <select id="sim" class="select">
+      <option value="galaxy">Spiral galaxy</option>
+      <option value="fireworks">Fireworks</option>
+      <option value="flock">Bird flock</option>
+    </select>
+  </div>
+  <div class="ctl">
+    <label for="gravity"><span id="gravityLabel">Gravity</span><output id="gravityOut" for="gravity"></output></label>
+    <input type="range" id="gravity" min="0" max="1000" step="1">
+  </div>
+  <button type="button" class="btn primary" id="bench">Find each lane's limit</button>
+  <p class="solo-hint" id="clickHint">Click anywhere to drop a black hole. Reset clears them.</p>
+</footer>
+
+<div class="result" aria-live="polite">
+  <strong>Last result</strong>
+  <span id="resultText">Press "Find each lane's limit" to see how many particles each language can move at a smooth 60 fps on your computer. Click a simulation to drop a black hole, or a hawk for the flock.</span>
+</div>
+
+<template id="laneTpl">
+  <section class="lane">
+    <div class="lane-head">
+      <div>
+        <h2></h2>
+        <p class="detail"></p>
+        <span class="chip"></span>
+      </div>
+      <div class="fps"><span class="fps-num">–</span><span>fps</span></div>
+    </div>
+    <div class="stage">
+      <div class="overlay">Starting…</div>
+    </div>
+    <div class="metrics">
+      <div><span class="k">Frame time</span><span class="v m-frame">–</span></div>
+      <div><span class="k">Physics</span><span class="v m-physics">–</span></div>
+      <div><span class="k">Drawing</span><span class="v m-draw">–</span></div>
+    </div>
+    <div class="graph-head"><span>Last 10 seconds</span><span>Dashed line: 16.7 ms, the limit for smooth 60 fps</span></div>
+    <canvas class="graph"></canvas>
+  </section>
+</template>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

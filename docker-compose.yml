@@ -1,0 +1,8 @@
+services:
+  swarm:
+    build: .
+    container_name: swarm
+    restart: unless-stopped
+    ports:
+      # Only reachable from the VPS itself; your main nginx handles the public side
+      - "127.0.0.1:8086:80"
